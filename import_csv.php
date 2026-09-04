@@ -44,9 +44,6 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     respond(405, ['success' => false, 'error' => 'Only POST is allowed.']);
 }
 
-// NOTE: this endpoint writes to the database with no auth check.
-// Add session/token verification here before using it beyond local dev.
-
 // ---------------------------------------------------------------------
 // 1. Validate the upload
 // ---------------------------------------------------------------------
@@ -76,8 +73,6 @@ $columns = array_map(function ($col) {
     return $col;
 }, $header);
 
-// Read all data rows into memory (fine for typical CRM import sizes;
-// for very large files, switch to a two-pass streaming approach instead)
 $rows = [];
 while (($row = fgetcsv($handle)) !== false) {
     $rows[] = array_pad(array_slice($row, 0, count($columns)), count($columns), null);
@@ -170,7 +165,7 @@ try {
 // ---------------------------------------------------------------------
 // 4. Create the table (named after today's date)
 // ---------------------------------------------------------------------
-$tableName = 'data_' . date('Y_m_d');
+$tableName = 'data_' . date('Y-m-d');
 $quotedTable = '`' . str_replace('`', '``', $tableName) . '`';
 
 $columnDefs = [];
