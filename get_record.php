@@ -1,5 +1,4 @@
 <?php
-
     header('Access-Control-Allow-Origin: *');
     header('Access-Control-Allow-Methods: GET');
     header('Access-Control-Allow-Headers: Content-Type');
@@ -11,8 +10,8 @@
         exit;
     }
 
-    if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
-        respond(405, ['success' => false, 'error' => 'Only GET is allowed.']);
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        respond(405, ['success' => false, 'error' => 'Only POST is allowed.']);
     }
 
     $credentials = fopen(__DIR__ . "/credentials.txt", "r");
@@ -32,36 +31,14 @@
     } catch (PDOException $e) {
         respond(500, ['success' => false, 'error' => 'Database connection failed: ' . $e->getMessage()]);
     }
-
-    $sql = "SHOW TABLES";
-    $result = $conn->query($sql);
-
-    $latestTable = null;
-    $latestTimestamp = null;
-
-    foreach ($result as $row) {
-        $tableName = $row[0];
-
-        if (strpos($tableName, 'data_') !== 0) {
-            continue;
-        }
-
-        $recordDate = strtotime(str_replace("data_", "", $tableName));
-        if ($recordDate === false) {
-            continue;
-        }
-
-        if ($latestTimestamp === null || $recordDate > $latestTimestamp) {
-            $latestTimestamp = $recordDate;
-            $latestTable = $tableName;
-        }
+    
+    if(isset($_POST['table']) and isset($_POST['id'])) {
+        $quarriedTable = $_POST["table"];
+        $quarriedRecord = $_POST["id"];
+    }else{
+        respond(400, ["success"=> false,"error"=> "Data either missing or invalid."]);
     }
-
-    if ($latestTable === null) {
-        respond(404, ['success' => false, 'error' => 'No data_ tables found.']);
-    }
-
-
+    //vomit
     $stmt = $conn->query("SELECT 
     id AS 'ID',
      ___Computer_Name AS 'Nazwa', 
@@ -75,8 +52,9 @@
      Last_Remote_User AS 'Ostatnio Zalogowany',
      LAN_IP_Addresses AS 'Adres IP LAN',
      Note AS 'Notatka' 
-     FROM `$latestTable` LIMIT 50");
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+     FROM `$quarriedTable` WHERE id = $quarriedRecord");
 
-    respond(200, ["success" => true, "table" => $latestTable, "result" => $rows]);
+    
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    respond(200, ["success" => true, "result" => $rows]);
 ?>

@@ -24,7 +24,7 @@ fclose($credentials);
 // ---------------------------------------------------------------------
 // CORS + response helpers
 // ---------------------------------------------------------------------
-header('Access-Control-Allow-Origin: *'); // restrict to your React app's origin in production
+header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 header('Content-Type: application/json');
