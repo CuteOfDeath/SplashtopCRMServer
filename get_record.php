@@ -32,29 +32,36 @@
         respond(500, ['success' => false, 'error' => 'Database connection failed: ' . $e->getMessage()]);
     }
     
-    if(isset($_POST['table']) and isset($_POST['id'])) {
-        $quarriedTable = $_POST["table"];
-        $quarriedRecord = $_POST["id"];
-    }else{
-        respond(400, ["success"=> false,"error"=> "Data either missing or invalid."]);
-    }
-    //vomit
-    $stmt = $conn->query("SELECT 
-    id AS 'ID',
-     ___Computer_Name AS 'Nazwa', 
-     Device_Name AS 'Nazwa Urządzenia',
-     Group_Name AS 'Nazwa Klienta', 
-     Operating_System AS 'System Operacyjny',
-     Streamer_Version AS 'Wersja Streamera',
-     IP_Address AS 'Adres IP',
-     Last_Session_End_Time AS 'Ostatnia Sesja', 
-     Last_Online AS 'Ostatnio Online',
-     Last_Remote_User AS 'Ostatnio Zalogowany',
-     LAN_IP_Addresses AS 'Adres IP LAN',
-     Note AS 'Notatka' 
-     FROM `$quarriedTable` WHERE id = $quarriedRecord");
+        $body = json_decode(file_get_contents('php://input'), true);
 
-    
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (isset($body['table']) && isset($body['id'])) {
+            $quarriedTable = $body['table'];
+            $quarriedRecord = $body['id'];
+        } else {
+            respond(400, ["success" => false, "error" => "Data either missing or invalid."]);
+        }
+    //vomit
+    try{
+        $stmt = $conn->prepare("SELECT 
+        id AS 'ID',
+        ___Computer_Name AS 'Nazwa', 
+        Device_Name AS 'Nazwa Urządzenia',
+        Group_Name AS 'Nazwa Klienta', 
+        Operating_System AS 'System Operacyjny',
+        Streamer_Version AS 'Wersja Streamera',
+        IP_Address AS 'Adres IP',
+        Last_Session_End_Time AS 'Ostatnia Sesja', 
+        Last_Online AS 'Ostatnio Online',
+        Last_Remote_User AS 'Ostatnio Zalogowany',
+        LAN_IP_Addresses AS 'Adres IP LAN',
+        Note AS 'Notatka' 
+        FROM `$quarriedTable` WHERE id = :id");
+        $stmt->bindParam(':id', $quarriedRecord, PDO::PARAM_INT);
+        $stmt->execute();
+        
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }catch(PDOException $e) {
+        respond(500, ["success"=> false, "error" => 'Fetch failed: ' . $e->getMessage()]);
+    }
     respond(200, ["success" => true, "result" => $rows]);
 ?>
