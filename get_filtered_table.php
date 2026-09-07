@@ -28,9 +28,6 @@
     try {
         $conn = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME", $DB_USER, $DB_PASS);
         $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        // Use real (native) prepared statements rather than PDO's emulated ones.
-        // Not strictly required for what's below, but it's a good default for
-        // anything touching user input.
         $conn->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
     } catch (PDOException $e) {
         respond(500, ['success' => false, 'error' => 'Database connection failed: ' . $e->getMessage()]);
@@ -76,15 +73,11 @@
         respond(400, ["success" => false, "error" => "Data either missing or invalid."]);
     }
 
-    // --- Table name: never trust this directly, only allow known tables ---
     if (!in_array($quarriedTable, $allowedTables, true)) {
         respond(400, ["success" => false, "error" => "Unknown table."]);
     }
 
-    // --- Columns: only accept keys we actually recognise from $columnDefs.
-    // Anything not in that map is dropped rather than passed to SQL, so a
-    // malicious/unexpected key in the request body just gets ignored.
-    $filteredColumns = []; // internal_name => raw filter value from the client
+    $filteredColumns = []; 
     foreach ($body['columns'] as $friendlyName => $filterValue) {
         if (!array_key_exists($friendlyName, $columnDefs)) {
             continue;
@@ -92,8 +85,7 @@
         $filteredColumns[$columnDefs[$friendlyName]] = $filterValue;
     }
 
-    // --- Find out which of the requested columns are date/datetime typed ---
-    $columnTypes = []; // internal_name => data_type
+    $columnTypes = []; 
     if (!empty($filteredColumns)) {
         try {
             $placeholders = implode(',', array_fill(0, count($filteredColumns), '?'));
@@ -142,9 +134,6 @@
         return sprintf('%04d-%02d-%02d 00:00:00', $year, $month, $day);
     }
 
-    // --- Build the WHERE clause. Identifiers (column names) only ever come
-    // from $columnDefs above, never from the raw request; values always go
-    // in through bound parameters. ---
     $whereParts = [];
     $params = [];
     foreach ($filteredColumns as $internalName => $filterValue) {
@@ -162,11 +151,6 @@
     }
     $whereSql = $whereParts ? ('WHERE ' . implode(' AND ', $whereParts)) : '';
 
-    // --- Sort column. Rather than requiring the frontend to say what to sort
-    // by, sort by whichever column(s) are actually being filtered on. If more
-    // than one filter is active, chain them in the order they were given
-    // (all in the same direction) so the primary filter still dominates the
-    // order. Falls back to ID when nothing is being filtered. ---
     $sortDirection = $sort ? 'ASC' : 'DESC';
     $sortColumnsInternal = array_keys($filteredColumns);
     if (empty($sortColumnsInternal)) {
@@ -177,7 +161,6 @@
         $sortColumnsInternal
     ));
 
-    // --- Range -> LIMIT / OFFSET. Cast to int so these can never carry SQL. ---
     $offset = max(0, (int) ($range[0] ?? 0));
     $limitCount = max(0, (int) ($range[1] ?? 0) - $offset);
 
