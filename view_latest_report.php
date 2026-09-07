@@ -61,22 +61,25 @@
         respond(404, ['success' => false, 'error' => 'No data_ tables found.']);
     }
 
-
-    $stmt = $conn->query("SELECT 
-    id AS 'ID',
-     ___Computer_Name AS 'Nazwa', 
-     Device_Name AS 'Nazwa Urządzenia',
-     Group_Name AS 'Nazwa Klienta', 
-     Operating_System AS 'System Operacyjny',
-     Streamer_Version AS 'Wersja Streamera',
-     IP_Address AS 'Adres IP',
-     Last_Session_End_Time AS 'Ostatnia Sesja', 
-     Last_Online AS 'Ostatnio Online',
-     Last_Remote_User AS 'Ostatnio Zalogowany',
-     LAN_IP_Addresses AS 'Adres IP LAN',
-     Note AS 'Notatka' 
-     FROM `$latestTable` LIMIT 50");
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    try{
+        $stmt = $conn->query("SELECT 
+        id AS 'ID',
+        ___Computer_Name AS 'Nazwa', 
+        Device_Name AS 'Nazwa Urządzenia',
+        Group_Name AS 'Nazwa Klienta', 
+        Operating_System AS 'System Operacyjny',
+        Streamer_Version AS 'Wersja Streamera',
+        IP_Address AS 'Adres IP',
+        Last_Session_End_Time AS 'Ostatnia Sesja', 
+        Last_Online AS 'Ostatnio Online',
+        Last_Remote_User AS 'Ostatnio Zalogowany',
+        LAN_IP_Addresses AS 'Adres IP LAN',
+        Note AS 'Notatka' 
+        FROM `$latestTable` LIMIT 50");
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }catch(PDOException $e) {
+        respond(500, ["success"=> false, "error" => 'Fetch failed: ' . $e->getMessage()]);
+    }
 
     respond(200, ["success" => true, "table" => $latestTable, "result" => $rows]);
 ?>
