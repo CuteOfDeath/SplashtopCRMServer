@@ -52,10 +52,16 @@
         'Notatka' => 'Note'
     ];
 
-    // Only these tables may ever be queried through this endpoint.
-    // TODO: put your real table name(s) here.
-
+    $sql = "SHOW TABLES";
+    $result = $conn->query($sql);
     $allowedTables = ['data_2026-09-04'];
+    foreach ($result as $row) {
+        $tableName = $row[0];
+
+        if (strpos($tableName, 'data_') == 0) {
+            array_push($allowedTables,$tableName);
+        }
+    }
 
     $body = json_decode(file_get_contents('php://input'), true);
     //table is a string with the quarried table
