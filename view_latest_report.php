@@ -61,6 +61,18 @@
         respond(404, ['success' => false, 'error' => 'No data_ tables found.']);
     }
 
+    $sql = "SELECT COUNT(*) AS 'count'
+        FROM `$latestTable`";
+
+    try {
+        $stmt = $conn->prepare($sql);
+        $stmt->execute();
+        $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $count = $data[0]["count"];
+    } catch (PDOException $e) {
+        respond(500, ['success' => false, 'error' => $e->getMessage()]);
+    }
+
     try{
         $stmt = $conn->query("SELECT 
         id AS 'ID',
@@ -81,5 +93,5 @@
         respond(500, ["success"=> false, "error" => 'Fetch failed: ' . $e->getMessage()]);
     }
 
-    respond(200, ["success" => true, "table" => $latestTable, "result" => $rows]);
+    respond(200, ["success" => true, "table" => $latestTable, "result" => $rows, "count" => $count]);
 ?>
