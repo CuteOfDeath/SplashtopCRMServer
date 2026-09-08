@@ -149,6 +149,19 @@
             $params[] = '%' . $filterValue . '%';
         }
     }
+
+    // Defaults to false when not provided, so rows with any null are filtered
+    // out unless the caller explicitly opts in with allow_null: true.
+    $allowNull = isset($body['allow_null'])
+        ? filter_var($body['allow_null'], FILTER_VALIDATE_BOOLEAN)
+        : false;
+
+    if (!$allowNull) {
+        foreach ($columnDefs as $internalName) {
+            $whereParts[] = "`$internalName` IS NOT NULL";
+        }
+    }
+
     $whereSql = $whereParts ? ('WHERE ' . implode(' AND ', $whereParts)) : '';
 
     $sortDirection = $sort ? 'ASC' : 'DESC';
@@ -194,7 +207,7 @@
         $stmt = $conn->prepare($sql);
         $stmt->execute($params);
         $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        respond(200, ['success' => true, 'result' => $data, 'count' => $count, 'order' => $orderBySql, 'where' => $whereSql]);
+        respond(200, ['success' => true, 'result' => $data, 'count' => $count]);
     } catch (PDOException $e) {
         respond(500, ['success' => false, 'error' => $e->getMessage()]);
     }
