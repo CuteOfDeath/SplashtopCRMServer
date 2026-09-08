@@ -164,6 +164,18 @@
     $offset = max(0, (int) ($range[0] ?? 0));
     $limitCount = max(0, (int) ($range[1] ?? 0) - $offset);
 
+    $sql = "SELECT COUNT(*) AS 'count'
+        FROM `$quarriedTable` $whereSql ORDER BY $orderBySql";
+
+    try {
+        $stmt = $conn->prepare($sql);
+        $stmt->execute($params);
+        $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $count = $data[0]["count"];
+    } catch (PDOException $e) {
+        respond(500, ['success' => false, 'error' => $e->getMessage()]);
+    }
+
     $sql = "SELECT id AS 'ID',
         ___Computer_Name AS 'Nazwa', 
         Device_Name AS 'Nazwa Urządzenia',
@@ -182,7 +194,7 @@
         $stmt = $conn->prepare($sql);
         $stmt->execute($params);
         $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        respond(200, ['success' => true, 'result' => $data, 'wheresql' => $whereSql, 'orderbysql' => $orderBySql, 'offset'=> $offset,'limit'=> $limitCount, 'body' => $body]);
+        respond(200, ['success' => true, 'result' => $data, 'count' => $count, 'order' => $orderBySql, 'where' => $whereSql]);
     } catch (PDOException $e) {
         respond(500, ['success' => false, 'error' => $e->getMessage()]);
     }
