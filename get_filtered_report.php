@@ -33,22 +33,6 @@
         respond(500, ['success' => false, 'error' => 'Database connection failed: ' . $e->getMessage()]);
     }
 
-    // Change from frontend definitions to ones internally in the database
-    $columnDefs = [
-        'ID'=> 'id',
-        'Nazwa'=> '___Computer_Name',
-        'Nazwa Urządzenia' => 'Device_Name',
-        'Nazwa Klienta'=> 'Group_Name',
-        'System Operacyjny' => 'Operating_System',
-        'Wersja Streamera' => 'Streamer_Version',
-        'Adres IP' => 'IP_Address',
-        'Ostatnia Sesja' => 'Last_Session_End_Time',
-        'Ostatnio Online' => 'Last_Online',
-        'Ostatnio Zalogowany' => 'Last_Remote_User',
-        'Adres IP LAN' => 'LAN_IP_Addresses',
-        'Notatka' => 'Note'
-    ];
-
     $sql = "SHOW TABLES";
     $result = $conn->query($sql);
     $allowedTables = ['data_2026-09-04'];
@@ -79,10 +63,7 @@
 
     $filteredColumns = []; 
     foreach ($body['columns'] as $friendlyName => $filterValue) {
-        if (!array_key_exists($friendlyName, $columnDefs)) {
-            continue;
-        }
-        $filteredColumns[$columnDefs[$friendlyName]] = $filterValue;
+        $filteredColumns[$friendlyName] = $filterValue;
     }
 
     $columnTypes = []; 
@@ -157,7 +138,7 @@
         : false;
 
     if (!$allowNull) {
-        foreach ($columnDefs as $internalName) {
+        foreach ($filteredColumns as $internalName) {
             $whereParts[] = "`$internalName` IS NOT NULL";
         }
     }
@@ -167,7 +148,7 @@
     $sortDirection = $sort ? 'ASC' : 'DESC';
     $sortColumnsInternal = array_keys($filteredColumns);
     if (empty($sortColumnsInternal)) {
-        $sortColumnsInternal = [$columnDefs['ID']];
+        $sortColumnsInternal = ['id'];
     }
     $orderBySql = implode(', ', array_map(
         fn($col) => "`$col` $sortDirection",
@@ -189,19 +170,7 @@
         respond(500, ['success' => false, 'error' => $e->getMessage()]);
     }
 
-    $sql = "SELECT id AS 'ID',
-        ___Computer_Name AS 'Nazwa', 
-        Device_Name AS 'Nazwa Urządzenia',
-        Group_Name AS 'Nazwa Klienta', 
-        Operating_System AS 'System Operacyjny',
-        Streamer_Version AS 'Wersja Streamera',
-        IP_Address AS 'Adres IP',
-        Last_Session_End_Time AS 'Ostatnia Sesja', 
-        Last_Online AS 'Ostatnio Online',
-        Last_Remote_User AS 'Ostatnio Zalogowany',
-        LAN_IP_Addresses AS 'Adres IP LAN',
-        Note AS 'Notatka'
-        FROM `$quarriedTable` $whereSql ORDER BY $orderBySql LIMIT $limitCount OFFSET $offset";
+    $sql = "SELECT * FROM `$quarriedTable` $whereSql ORDER BY $orderBySql LIMIT $limitCount OFFSET $offset";
 
     try {
         $stmt = $conn->prepare($sql);

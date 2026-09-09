@@ -1,16 +1,4 @@
 <?php
-/**
- * import_csv_endpoint.php
- *
- * HTTP endpoint for the CRM's React front-end.
- * Accepts a CSV file upload (multipart/form-data, field name "csv_file"),
- * detects a SQL type per column, and creates+populates a MySQL table
- * named after the current date.
- *
- * Request:  POST, multipart/form-data, field "csv_file"
- * Response: JSON { success, table, row_count, columns } or { success:false, error }
- */
-
 $credentials = fopen("credentials.txt", "r");
 $DB_HOST = trim(fgets($credentials));
 $DB_NAME = trim(fgets($credentials));
@@ -21,9 +9,6 @@ if (!feof($credentials)) {
 }
 fclose($credentials);
 
-// ---------------------------------------------------------------------
-// CORS + response helpers
-// ---------------------------------------------------------------------
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
@@ -44,9 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     respond(405, ['success' => false, 'error' => 'Only POST is allowed.']);
 }
 
-// ---------------------------------------------------------------------
-// 1. Validate the upload
-// ---------------------------------------------------------------------
+
 if (!isset($_FILES['csv_file']) || $_FILES['csv_file']['error'] !== UPLOAD_ERR_OK) {
     respond(400, ['success' => false, 'error' => 'No valid file uploaded under field "csv_file".']);
 }
@@ -63,8 +46,22 @@ if ($header === false) {
     respond(400, ['success' => false, 'error' => 'CSV file appears to be empty.']);
 }
 
-// Sanitize header names into safe column identifiers
-$columns = array_map(function ($col) {
+$columnConfig = [ //Configure added columns to match the CSV structure
+        '___Computer_Name' => "Nazwa",
+        'Device_Name' => 'Nazwa Urządzenia',
+        'Group_Name' => 'Nazwa Klienta',
+        'Operating_System' => 'System Operacyjny',
+        'Streamer_Version' => 'Wersja Streamera',
+        'IP_Address' => 'Adres IP',
+        'Last_Session_Start_Time' => 'Ostatnie Rozpoczęcie Sesji',
+        'Last_Session_End_Time' => 'Ostatnia Sesja',
+        'Last_Online' => 'Ostatnio Online',
+        'Last_Remote_User' => 'Ostatnio zalogowany',
+        'LAN_IP_Addresses' => 'Adres IP sieci LAN',
+        'Note' => 'Notatka'
+];
+
+$originalcolumns = array_map(function ($col) {
     $col = trim($col);
     $col = preg_replace('/[^A-Za-z0-9_]/', '_', $col);
     if ($col === '' || preg_match('/^[0-9]/', $col)) {
@@ -73,15 +70,28 @@ $columns = array_map(function ($col) {
     return $col;
 }, $header);
 
+
+$validIndices = [];
+foreach ($originalcolumns as $idx => $rawCol) {
+    if (array_key_exists($rawCol, $columnConfig)) {
+        $validIndices[] = $idx;
+    }
+}
+
+$columns = array_map(
+    fn($idx) => $columnConfig[$originalcolumns[$idx]],
+    $validIndices
+);
+
 $rows = [];
 while (($row = fgetcsv($handle)) !== false) {
-    $rows[] = array_pad(array_slice($row, 0, count($columns)), count($columns), null);
+    $filteredRow = [];
+    foreach ($validIndices as $idx) {
+        $filteredRow[] = $row[$idx] ?? null;
+    }
+    $rows[] = $filteredRow;
 }
 fclose($handle);
-
-// ---------------------------------------------------------------------
-// 2. Type detection
-// ---------------------------------------------------------------------
 function detectColumnType(array $values): string {
     $nonEmpty = array_filter($values, fn($v) => $v !== null && trim((string)$v) !== '');
 
@@ -144,13 +154,11 @@ function isValidDate(string $value, string $format): bool {
 
 $columnTypes = [];
 foreach ($columns as $i => $col) {
-    $values = array_column($rows, $i);
-    $columnTypes[$col] = detectColumnType($values);
+        $values = array_column($rows, $i);
+        $columnTypes[$col] = detectColumnType($values);
 }
 
-// ---------------------------------------------------------------------
-// 3. Connect to the database
-// ---------------------------------------------------------------------
+
 try {
     $pdo = new PDO(
         "mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4",
@@ -162,9 +170,7 @@ try {
     respond(500, ['success' => false, 'error' => 'Database connection failed: ' . $e->getMessage()]);
 }
 
-// ---------------------------------------------------------------------
-// 4. Create the table (named after today's date)
-// ---------------------------------------------------------------------
+
 $tableName = 'data_' . date('Y-m-d');
 $quotedTable = '`' . str_replace('`', '``', $tableName) . '`';
 
@@ -172,6 +178,7 @@ $columnDefs = [];
 foreach ($columnTypes as $col => $type) {
     $quotedCol = '`' . str_replace('`', '``', $col) . '`';
     $columnDefs[] = "$quotedCol $type";
+    
 }
 
 $createSql = "CREATE TABLE $quotedTable (\n"
@@ -183,16 +190,14 @@ try {
     $pdo->exec("DROP TABLE IF EXISTS $quotedTable");
     $pdo->exec($createSql);
 } catch (PDOException $e) {
-    respond(500, ['success' => false, 'error' => 'Table creation failed: ' . $e->getMessage()]);
+    respond(500, ['success' => false, 'createsql' => $createSql, 'error' => 'Table creation failed: ' . $e->getMessage()]);
 }
 
-// ---------------------------------------------------------------------
-// 5. Insert rows (blank values become NULL for non-text columns)
-// ---------------------------------------------------------------------
 $placeholders = implode(', ', array_fill(0, count($columns), '?'));
 $quotedCols = implode(', ', array_map(fn($c) => '`' . str_replace('`', '``', $c) . '`', $columns));
 $insertSql = "INSERT INTO $quotedTable ($quotedCols) VALUES ($placeholders)";
 $stmt = $pdo->prepare($insertSql);
+
 
 try {
     $pdo->beginTransaction();
@@ -200,7 +205,7 @@ try {
         $bound = array_map(function ($v, $col) use ($columnTypes) {
             $v = $v === null ? null : trim((string)$v);
             if ($v === '' && $columnTypes[$col] !== 'TEXT' && strpos($columnTypes[$col], 'VARCHAR') === false) {
-                return null; // blank numeric/date value -> NULL
+                return null;
             }
             return $v;
         }, $row, $columns);
@@ -209,12 +214,10 @@ try {
     $pdo->commit();
 } catch (PDOException $e) {
     $pdo->rollBack();
-    respond(500, ['success' => false, 'error' => 'Row insert failed: ' . $e->getMessage()]);
+    respond(500, ['success' => false, 'bound' => $bound, 'error' => 'Row insert failed: ' . $e->getMessage()]);
 }
 
-// ---------------------------------------------------------------------
-// 6. Respond
-// ---------------------------------------------------------------------
+
 respond(200, [
     'success'   => true,
 ]);

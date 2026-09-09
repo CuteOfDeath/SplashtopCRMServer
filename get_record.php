@@ -42,20 +42,7 @@
         }
     //vomit
     try{
-        $stmt = $conn->prepare("SELECT 
-        id AS 'ID',
-        ___Computer_Name AS 'Nazwa', 
-        Device_Name AS 'Nazwa Urządzenia',
-        Group_Name AS 'Nazwa Klienta', 
-        Operating_System AS 'System Operacyjny',
-        Streamer_Version AS 'Wersja Streamera',
-        IP_Address AS 'Adres IP',
-        Last_Session_End_Time AS 'Ostatnia Sesja', 
-        Last_Online AS 'Ostatnio Online',
-        Last_Remote_User AS 'Ostatnio Zalogowany',
-        LAN_IP_Addresses AS 'Adres IP LAN',
-        Note AS 'Notatka' 
-        FROM `$quarriedTable` WHERE id = :id");
+        $stmt = $conn->prepare("SELECT * FROM `$quarriedTable` WHERE id = :id");
         $stmt->bindParam(':id', $quarriedRecord, PDO::PARAM_INT);
         $stmt->execute();
         
