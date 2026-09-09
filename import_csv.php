@@ -217,7 +217,4 @@ try {
 // ---------------------------------------------------------------------
 respond(200, [
     'success'   => true,
-    'table'     => $tableName,
-    'row_count' => count($rows),
-    'columns'   => $columnTypes,
 ]);
