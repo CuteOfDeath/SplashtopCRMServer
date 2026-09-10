@@ -74,7 +74,7 @@
     }
 
     try{
-        $stmt = $conn->query("SELECT r.*, a.`Data Umówienia`, a.`Notatka`
+        $stmt = $conn->query("SELECT r.*, a.`Data Umówiona`, a.`Notatka`
             FROM `$latestTable` r
             LEFT JOIN aktywnosc a
                 ON a.Nazwa = r.Nazwa
