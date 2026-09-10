@@ -120,7 +120,7 @@
     $wherePartsActivity = [];
     $params = [];
     foreach ($filteredColumns as $internalName => $filterValue) {
-        if ($internalName !== "Data Umówienia" && $internalName !== "Notatka") {
+        if ($internalName !== "Data Umówiona" && $internalName !== "Notatka") {
             if ($filterValue === '' || $filterValue === null) {
                 continue;
             }
@@ -154,8 +154,9 @@
         : false;
 
     if (!$allowNull) {
-        foreach ($filteredColumns as $internalName) {
-            $whereParts[] = "`$internalName` IS NOT NULL";
+    foreach (array_keys($filteredColumns) as $internalName) {
+        $alias = ($internalName !== "Data Umówiona" && $internalName !== "Notatka") ? 'r' : 'a';
+        $whereParts[] = "$alias.`$internalName` IS NOT NULL";
         }
     }
 
@@ -169,7 +170,7 @@
 
     $orderBySql = [];
     foreach($sortColumnsInternal as $column) {
-        if($column !== "Data Umówienia" && $column !== "Notatka"){
+        if($column !== "Data Umówiona" && $column !== "Notatka"){
             $orderBySql[] = "r.`$column` $sortDirection";
         }else{
             $orderBySql[] = "a.`$column` $sortDirection";
@@ -181,7 +182,7 @@
     $offset = max(0, (int) ($range[0] ?? 0));
     $limitCount = max(0, (int) ($range[1] ?? 0) - $offset);
 
-    $sql = "SELECT COUNT(*) AS 'count', a.`Data Umówienia`, a.`Notatka`
+    $sql = "SELECT COUNT(*) AS 'count', a.`Data Umówiona`, a.`Notatka`
             FROM `$quarriedTable` r
             LEFT JOIN aktywnosc a
                 ON a.Nazwa = r.Nazwa
