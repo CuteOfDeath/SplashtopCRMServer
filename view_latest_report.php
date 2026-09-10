@@ -74,7 +74,15 @@
     }
 
     try{
-        $stmt = $conn->query("SELECT * FROM `$latestTable` LIMIT 50");
+        $stmt = $conn->query("SELECT r.*, a.`Data Umówienia`, a.`Notatka`
+            FROM `$latestTable` r
+            LEFT JOIN aktywnosc a
+                ON a.Nazwa = r.Nazwa
+                AND a.`Data Dodania` = (
+                    SELECT MAX(a2.`Data Dodania`)
+                    FROM aktywnosc a2
+                    WHERE a2.Nazwa = a.Nazwa
+                ) ORDER BY r.id LIMIT 50");
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }catch(PDOException $e) {
         respond(500, ["success"=> false, "error" => 'Fetch failed: ' . $e->getMessage()]);
