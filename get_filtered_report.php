@@ -73,7 +73,8 @@
             $stmt = $conn->prepare(
                 "SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
                  WHERE TABLE_SCHEMA = DATABASE()
-                 AND TABLE_NAME = ?
+                 AND TABLE_NAME = ? OR
+                 TABLE_NAME = 'aktywnosc'
                  AND COLUMN_NAME IN ($placeholders)"
             );
             $stmt->execute(array_merge([$quarriedTable], array_keys($filteredColumns)));
@@ -116,18 +117,33 @@
     }
 
     $whereParts = [];
+    $wherePartsActivity = [];
     $params = [];
     foreach ($filteredColumns as $internalName => $filterValue) {
-        if ($filterValue === '' || $filterValue === null) {
-            continue;
-        }
-        $type = $columnTypes[$internalName] ?? null;
-        if (in_array($type, ['date', 'datetime', 'timestamp'], true)) {
-            $whereParts[] = "`$internalName` >= ?";
-            $params[] = partialInputToDate((string) $filterValue);
-        } else {
-            $whereParts[] = "`$internalName` LIKE ?";
-            $params[] = '%' . $filterValue . '%';
+        if ($internalName !== "Data Umówienia" && $internalName !== "Notatka") {
+            if ($filterValue === '' || $filterValue === null) {
+                continue;
+            }
+            $type = $columnTypes[$internalName] ?? null;
+            if (in_array($type, ['date', 'datetime', 'timestamp'], true)) {
+                $whereParts[] = "r.`$internalName` >= ?";
+                $params[] = partialInputToDate((string) $filterValue);
+            } else {
+                $whereParts[] = "r.`$internalName` LIKE ?";
+                $params[] = '%' . $filterValue . '%';
+            }
+        }else{
+            if ($filterValue === '' || $filterValue === null) {
+                continue;
+            }
+            $type = $columnTypes[$internalName] ?? null;
+            if (in_array($type, ['date', 'datetime', 'timestamp'], true)) {
+                $whereParts[] = "a.`$internalName` >= ?";
+                $params[] = partialInputToDate((string) $filterValue);
+            } else {
+                $whereParts[] = "a.`$internalName` LIKE ?";
+                $params[] = '%' . $filterValue . '%';
+            }
         }
     }
 
@@ -150,16 +166,30 @@
     if (empty($sortColumnsInternal)) {
         $sortColumnsInternal = ['id'];
     }
-    $orderBySql = implode(', ', array_map(
-        fn($col) => "`$col` $sortDirection",
-        $sortColumnsInternal
-    ));
+
+    $orderBySql = [];
+    foreach($sortColumnsInternal as $column) {
+        if($column !== "Data Umówienia" && $column !== "Notatka"){
+            $orderBySql[] = "r.`$column` $sortDirection";
+        }else{
+            $orderBySql[] = "a.`$column` $sortDirection";
+        }
+    }
+    $orderBySql = implode(", ", $orderBySql);
+
 
     $offset = max(0, (int) ($range[0] ?? 0));
     $limitCount = max(0, (int) ($range[1] ?? 0) - $offset);
 
-    $sql = "SELECT COUNT(*) AS 'count'
-        FROM `$quarriedTable` $whereSql ORDER BY $orderBySql";
+    $sql = "SELECT COUNT(*) AS 'count', a.`Data Umówienia`, a.`Notatka`
+            FROM `$quarriedTable` r
+            LEFT JOIN aktywnosc a
+                ON a.Nazwa = r.Nazwa
+                AND a.`Data Dodania` = (
+                    SELECT MAX(a2.`Data Dodania`)
+                    FROM aktywnosc a2
+                    WHERE a2.Nazwa = a.Nazwa 
+                ) $whereSql ORDER BY $orderBySql";
 
     try {
         $stmt = $conn->prepare($sql);
@@ -170,7 +200,15 @@
         respond(500, ['success' => false, 'error' => $e->getMessage()]);
     }
 
-    $sql = "SELECT * FROM `$quarriedTable` $whereSql ORDER BY $orderBySql LIMIT $limitCount OFFSET $offset";
+    $sql = "SELECT r.*, a.`Data Umówiona`, a.`Notatka`
+            FROM `$quarriedTable` r
+            LEFT JOIN aktywnosc a
+                ON a.Nazwa = r.Nazwa
+                AND a.`Data Dodania` = (
+                    SELECT MAX(a2.`Data Dodania`)
+                    FROM aktywnosc a2
+                    WHERE a2.Nazwa = a.Nazwa 
+                ) $whereSql ORDER BY $orderBySql LIMIT $limitCount OFFSET $offset";
 
     try {
         $stmt = $conn->prepare($sql);
@@ -178,5 +216,5 @@
         $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
         respond(200, ['success' => true, 'result' => $data, 'count' => $count]);
     } catch (PDOException $e) {
-        respond(500, ['success' => false, 'error' => $e->getMessage()]);
+        respond(500, ['success' => false, 'error' => $e->getMessage(), 'wheresql' => $whereSql]);
     }
