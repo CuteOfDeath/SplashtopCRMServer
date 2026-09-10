@@ -58,7 +58,7 @@ $columnConfig = [ //Configure added columns to match the CSV structure
         'Last_Online' => 'Ostatnio Online',
         'Last_Remote_User' => 'Ostatnio zalogowany',
         'LAN_IP_Addresses' => 'Adres IP sieci LAN',
-        'Note' => 'Notatka'
+        'Note' => 'Notatka z Splashtopa'
 ];
 
 $originalcolumns = array_map(function ($col) {
