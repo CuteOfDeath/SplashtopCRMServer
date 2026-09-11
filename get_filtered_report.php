@@ -163,7 +163,9 @@
     $whereSql = $whereParts ? ('WHERE ' . implode(' AND ', $whereParts)) : '';
 
     $sortDirection = $sort ? 'ASC' : 'DESC';
-    $sortColumnsInternal = array_keys($filteredColumns);
+    $sortColumnsInternal = isset($body['orderby'])
+        ? $body['orderby']
+        : [];
     if (empty($sortColumnsInternal)) {
         $sortColumnsInternal = ['id'];
     }
