@@ -1,6 +1,6 @@
 <?php
     header('Access-Control-Allow-Origin: *');
-    header('Access-Control-Allow-Methods: GET');
+    header('Access-Control-Allow-Methods: POST');
     header('Access-Control-Allow-Headers: Content-Type');
     header('Content-Type: application/json');
 
@@ -47,7 +47,7 @@
 
     try {
         $stmt = $conn->prepare(
-            "INSERT INTO `aktywnosc` (`Nazwa`, `Data Dodania`, `Data Umówienia`, `Notatka`) VALUES (:name, :dataDodania, :dataUmowienia, :note)"
+            "INSERT INTO `aktywnosc` (`Nazwa`, `Data Dodania`, `Data Umówiona`, `Notatka`) VALUES (:name, :dataDodania, :dataUmowienia, :note)"
         );
         $stmt->bindValue(':name', $quarriedName, PDO::PARAM_STR);
         $stmt->bindValue(':dataDodania', $currentDate, PDO::PARAM_STR);
