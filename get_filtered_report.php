@@ -207,10 +207,11 @@
             FROM `$quarriedTable` r
             LEFT JOIN aktywnosc a
                 ON a.Nazwa = r.Nazwa
+                AND a.Odznaczone = 0
                 AND a.`Data Dodania` = (
                     SELECT MAX(a2.`Data Dodania`)
                     FROM aktywnosc a2
-                    WHERE a2.Nazwa = a.Nazwa 
+                    WHERE a2.Nazwa = a.Nazwa AND a2.Odznaczone = 0
                 ) $whereSql ORDER BY $orderBySql LIMIT $limitCount OFFSET $offset";
 
     try {
