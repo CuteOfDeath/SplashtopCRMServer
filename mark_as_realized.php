@@ -34,8 +34,8 @@
 
     $body = json_decode(file_get_contents('php://input'), true);
 
-    if (isset($body['name'])) {
-        $quarriedName = $body['name'];
+    if (isset($body['id'])) {
+        $quarriedID = $body['id'];
     } else {
         respond(400, ["success" => false, "error" => "Data either missing or invalid."]);
     }
@@ -43,9 +43,9 @@
 
     try {
         $stmt = $conn->prepare(
-            "SELECT * FROM `aktywnosc` WHERE Nazwa = :name ORDER BY `Odznaczone` ASC, `Data Dodania` DESC"
+            "UPDATE `aktywnosc` SET `Odznaczone` = 1 WHERE id = :id"
         );
-        $stmt->bindValue(':name', $quarriedName, PDO::PARAM_STR);
+        $stmt->bindValue(':id', $quarriedID, PDO::PARAM_INT);
         $stmt->execute();
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {
