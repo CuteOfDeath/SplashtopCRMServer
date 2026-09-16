@@ -43,7 +43,7 @@
 
     try {
         $stmt = $conn->prepare(
-            "SELECT * FROM `aktywnosc` WHERE Nazwa = :name ORDER BY `Odznaczone` ASC, `Data Dodania` DESC"
+            "SELECT * FROM `aktywnosc` WHERE Nazwa = :name ORDER BY `Data Dodania` DESC"
         );
         $stmt->bindValue(':name', $quarriedName, PDO::PARAM_STR);
         $stmt->execute();

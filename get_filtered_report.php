@@ -61,6 +61,47 @@
         respond(400, ["success" => false, "error" => "Unknown table."]);
     }
 
+
+    try {
+        $stmt = $conn->prepare(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
+             ORDER BY ORDINAL_POSITION"
+        );
+        $stmt->execute([$quarriedTable]);
+        $reportColumns = array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'COLUMN_NAME');
+    } catch (PDOException $e) {
+        respond(500, ["success" => false, "error" => "Could not read report columns: " . $e->getMessage()]);
+    }
+
+
+    $hasOwnSession = in_array('Ostatnia Sesja', $reportColumns, true);
+    // a = latest non-checked activity, used for Data Umówiona / Notatka
+    // a_latest = latest activity regardless of Odznaczone, used for Ostatnia Sesja
+    $ostatniaSesjaExpr = $hasOwnSession
+        ? "COALESCE(a_latest.`Ostatnia Sesja`, r.`Ostatnia Sesja`)"
+        : "a_latest.`Ostatnia Sesja`";
+
+    function resolveColumnExpr(string $internalName, string $ostatniaSesjaExpr): string {
+        if ($internalName === 'Ostatnia Sesja') {
+            return $ostatniaSesjaExpr;
+        }
+        if ($internalName === 'Data Umówiona' || $internalName === 'Notatka') {
+            return "a.`$internalName`";
+        }
+        return "r.`$internalName`";
+    }
+
+    $reportSelectColumns = [];
+    foreach ($reportColumns as $col) {
+        if ($col === 'Ostatnia Sesja') {
+            continue; 
+        }
+        $reportSelectColumns[] = "r.`$col`";
+    }
+    $reportSelectColumns[] = "$ostatniaSesjaExpr AS `Ostatnia Sesja`";
+    $reportSelectSql = implode(', ', $reportSelectColumns);
+
     $filteredColumns = []; 
     foreach ($body['columns'] as $friendlyName => $filterValue) {
         $filteredColumns[$friendlyName] = $filterValue;
@@ -117,46 +158,31 @@
     }
 
     $whereParts = [];
-    $wherePartsActivity = [];
     $params = [];
     foreach ($filteredColumns as $internalName => $filterValue) {
-        if ($internalName !== "Data Umówiona" && $internalName !== "Notatka") {
-            if ($filterValue === '' || $filterValue === null) {
-                continue;
-            }
-            $type = $columnTypes[$internalName] ?? null;
-            if (in_array($type, ['date', 'datetime', 'timestamp'], true)) {
-                $whereParts[] = "r.`$internalName` >= ?";
-                $params[] = partialInputToDate((string) $filterValue);
-            } else {
-                $whereParts[] = "r.`$internalName` LIKE ?";
-                $params[] = '%' . $filterValue . '%';
-            }
-        }else{
-            if ($filterValue === '' || $filterValue === null) {
-                continue;
-            }
-            $type = $columnTypes[$internalName] ?? null;
-            if (in_array($type, ['date', 'datetime', 'timestamp'], true)) {
-                $whereParts[] = "a.`$internalName` >= ?";
-                $params[] = partialInputToDate((string) $filterValue);
-            } else {
-                $whereParts[] = "a.`$internalName` LIKE ?";
-                $params[] = '%' . $filterValue . '%';
-            }
+        if ($filterValue === '' || $filterValue === null) {
+            continue;
+        }
+        $columnExpr = resolveColumnExpr($internalName, $ostatniaSesjaExpr);
+        $type = $columnTypes[$internalName] ?? null;
+        if (in_array($type, ['date', 'datetime', 'timestamp'], true)) {
+            $whereParts[] = "$columnExpr >= ?";
+            $params[] = partialInputToDate((string) $filterValue);
+        } else {
+            $whereParts[] = "$columnExpr LIKE ?";
+            $params[] = '%' . $filterValue . '%';
         }
     }
 
     // Defaults to false when not provided, so rows with any null are filtered
-    // out unless the caller explicitly opts in with allow_null: true.
+    // out unless the frontend explicitly opts in with allow_null: true.
     $allowNull = isset($body['allow_null'])
         ? filter_var($body['allow_null'], FILTER_VALIDATE_BOOLEAN)
         : false;
 
     if (!$allowNull) {
-    foreach (array_keys($filteredColumns) as $internalName) {
-        $alias = ($internalName !== "Data Umówiona" && $internalName !== "Notatka") ? 'r' : 'a';
-        $whereParts[] = "$alias.`$internalName` IS NOT NULL";
+        foreach (array_keys($filteredColumns) as $internalName) {
+            $whereParts[] = resolveColumnExpr($internalName, $ostatniaSesjaExpr) . " IS NOT NULL";
         }
     }
 
@@ -171,12 +197,8 @@
     }
 
     $orderBySql = [];
-    foreach($sortColumnsInternal as $column) {
-        if($column !== "Data Umówiona" && $column !== "Notatka"){
-            $orderBySql[] = "r.`$column` $sortDirection";
-        }else{
-            $orderBySql[] = "a.`$column` $sortDirection";
-        }
+    foreach ($sortColumnsInternal as $column) {
+        $orderBySql[] = resolveColumnExpr($column, $ostatniaSesjaExpr) . " $sortDirection";
     }
     $orderBySql = implode(", ", $orderBySql);
 
@@ -186,12 +208,23 @@
 
     $sql = "SELECT COUNT(*) AS 'count', a.`Data Umówiona`, a.`Notatka`
             FROM `$quarriedTable` r
+
             LEFT JOIN aktywnosc a
                 ON a.Nazwa = r.Nazwa
+                AND a.Odznaczone = 0
                 AND a.`Data Dodania` = (
                     SELECT MAX(a2.`Data Dodania`)
                     FROM aktywnosc a2
-                    WHERE a2.Nazwa = a.Nazwa 
+                    WHERE a2.Nazwa = a.Nazwa
+                      AND a2.Odznaczone = 0
+                )
+
+            LEFT JOIN aktywnosc a_latest
+                ON a_latest.Nazwa = r.Nazwa
+                AND a_latest.`Data Dodania` = (
+                    SELECT MAX(a2.`Data Dodania`)
+                    FROM aktywnosc a2
+                    WHERE a2.Nazwa = r.Nazwa AND a2.`Ostatnia Sesja` IS NOT NULL
                 ) $whereSql ORDER BY $orderBySql";
 
     try {
@@ -203,15 +236,25 @@
         respond(500, ['success' => false, 'error' => $e->getMessage()]);
     }
 
-    $sql = "SELECT r.*, a.`Data Umówiona`, a.`Notatka`
+    $sql = "SELECT $reportSelectSql, a.`Data Umówiona`, a.`Notatka`
             FROM `$quarriedTable` r
+
             LEFT JOIN aktywnosc a
                 ON a.Nazwa = r.Nazwa
                 AND a.Odznaczone = 0
                 AND a.`Data Dodania` = (
                     SELECT MAX(a2.`Data Dodania`)
                     FROM aktywnosc a2
-                    WHERE a2.Nazwa = a.Nazwa AND a2.Odznaczone = 0
+                    WHERE a2.Nazwa = a.Nazwa
+                      AND a2.Odznaczone = 0
+                )
+
+            LEFT JOIN aktywnosc a_latest
+                ON a_latest.Nazwa = r.Nazwa
+                AND a_latest.`Data Dodania` = (
+                    SELECT MAX(a2.`Data Dodania`)
+                    FROM aktywnosc a2
+                    WHERE a2.Nazwa = r.Nazwa AND a2.`Ostatnia Sesja` IS NOT NULL
                 ) $whereSql ORDER BY $orderBySql LIMIT $limitCount OFFSET $offset";
 
     try {
@@ -220,5 +263,5 @@
         $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
         respond(200, ['success' => true, 'result' => $data, 'count' => $count]);
     } catch (PDOException $e) {
-        respond(500, ['success' => false, 'error' => $e->getMessage(), 'wheresql' => $whereSql]);
+        respond(500, ['success' => false, 'error' => $e->getMessage()]);
     }
