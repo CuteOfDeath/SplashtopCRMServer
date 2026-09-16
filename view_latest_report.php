@@ -29,6 +29,7 @@
     try {
         $conn = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME", $DB_USER, $DB_PASS);
         $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $conn->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
     } catch (PDOException $e) {
         respond(500, ['success' => false, 'error' => 'Database connection failed: ' . $e->getMessage()]);
     }
@@ -61,6 +62,30 @@
         respond(404, ['success' => false, 'error' => 'No data_ tables found.']);
     }
 
+    try {
+        $stmt = $conn->prepare(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
+             ORDER BY ORDINAL_POSITION"
+        );
+        $stmt->execute([$latestTable]);
+        $reportColumns = array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'COLUMN_NAME');
+    } catch (PDOException $e) {
+        respond(500, ['success' => false, 'error' => 'Could not read report columns: ' . $e->getMessage()]);
+    }
+
+    $reportSelectColumns = [];
+    foreach ($reportColumns as $col) {
+        if ($col === 'Ostatnia Sesja') {
+            continue; // handled below via COALESCE
+        }
+        $reportSelectColumns[] = "r.`$col`";
+    }
+    $reportSelectColumns[] = in_array('Ostatnia Sesja', $reportColumns, true)
+        ? "COALESCE(a_latest.`Ostatnia Sesja`, r.`Ostatnia Sesja`) AS `Ostatnia Sesja`"
+        : "a_latest.`Ostatnia Sesja` AS `Ostatnia Sesja`";
+    $reportSelectSql = implode(', ', $reportSelectColumns);
+
     $sql = "SELECT COUNT(*) AS 'count'
         FROM `$latestTable`";
 
@@ -74,7 +99,7 @@
     }
 
     try{
-        $stmt = $stmt = $conn->query("SELECT r.*, a.`Data Umówiona`, a.`Notatka`
+        $stmt = $conn->query("SELECT $reportSelectSql, a.`Data Umówiona`, a.`Notatka`
         FROM `$latestTable` r
         LEFT JOIN aktywnosc a
             ON a.Nazwa = r.Nazwa
@@ -83,6 +108,13 @@
                 SELECT MAX(a2.`Data Dodania`)
                 FROM aktywnosc a2
                 WHERE a2.Nazwa = a.Nazwa AND a2.Odznaczone = 0
+            )
+        LEFT JOIN aktywnosc a_latest
+            ON a_latest.Nazwa = r.Nazwa
+            AND a_latest.`Data Dodania` = (
+                SELECT MAX(a2.`Data Dodania`)
+                FROM aktywnosc a2
+                WHERE a2.Nazwa = r.Nazwa AND a2.`Ostatnia Sesja` IS NOT NULL
             )
         ORDER BY r.id LIMIT 50");
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
