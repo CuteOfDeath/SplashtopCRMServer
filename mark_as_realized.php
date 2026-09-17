@@ -34,18 +34,24 @@
 
     $body = json_decode(file_get_contents('php://input'), true);
 
-    if (isset($body['id'])) {
+    if (isset($body['id']) && isset($body['username'])) {
         $quarriedID = $body['id'];
+        $username = $body['username'];
     } else {
         respond(400, ["success" => false, "error" => "Data either missing or invalid."]);
     }
 
+    $note = $body["note"];
+
+
 
     try {
         $stmt = $conn->prepare(
-            "UPDATE `aktywnosc` SET `Odznaczone` = 1 WHERE id = :id"
+            "UPDATE `aktywnosc` SET `Odznaczone` = 1, `Użytkownik` = :username, `Notatka` = :note WHERE id = :id"
         );
         $stmt->bindValue(':id', $quarriedID, PDO::PARAM_INT);
+        $stmt->bindValue(':username', $username, PDO::PARAM_STR);
+        $stmt->bindValue(':note', $note, PDO::PARAM_STR);
         $stmt->execute();
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {

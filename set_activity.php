@@ -41,12 +41,15 @@
     }
 
     $quarriedMeetingDate = $body["meeting_date"] ?? null;
-    $quarriedSessionDate = $body["session_date"] ?? null;
+    $isconservation = $body["conservation"] ?? null;
     $quarriedUsername = $body["username"] ?? null;
     $quarriedMark = $body["mark"] ?? 0;
     $quarriedNote = $body["note"] ?? null;
 
     $currentDate = date("Y-m-d H:i:s");
+    if ($isconservation) {
+        $quarriedSessionDate = $currentDate;
+    }
 
     try {
         $stmt = $conn->prepare(
