@@ -206,7 +206,7 @@
     $offset = max(0, (int) ($range[0] ?? 0));
     $limitCount = max(0, (int) ($range[1] ?? 0) - $offset);
 
-    $sql = "SELECT COUNT(*) AS 'count', a.`Data Umówiona`, a.`Notatka`
+    $sql = "SELECT COUNT(*) AS 'count', a.`Data Umówiona`, a.`Notatka`, a.`Użytkownik`
             FROM `$quarriedTable` r
 
             LEFT JOIN aktywnosc a
@@ -236,7 +236,7 @@
         respond(500, ['success' => false, 'error' => $e->getMessage()]);
     }
 
-    $sql = "SELECT $reportSelectSql, a.`Data Umówiona`, a.`Notatka`
+    $sql = "SELECT $reportSelectSql, a.`Data Umówiona`, a.`Notatka`, a.`Użytkownik`
             FROM `$quarriedTable` r
 
             LEFT JOIN aktywnosc a
