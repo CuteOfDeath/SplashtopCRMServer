@@ -40,6 +40,7 @@
     $latestTable = null;
     $latestTimestamp = null;
 
+    //Calculate which of the currently available tables within the database have the name with the latest date
     foreach ($result as $row) {
         $tableName = $row[0];
 
@@ -61,7 +62,7 @@
     if ($latestTable === null) {
         respond(404, ['success' => false, 'error' => 'No data_ tables found.']);
     }
-
+    //rest is the same as in get_filtered_report.php
     try {
         $stmt = $conn->prepare(
             "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS

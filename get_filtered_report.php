@@ -13,7 +13,7 @@
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         respond(405, ['success' => false, 'error' => 'Only POST is allowed.']);
     }
-
+    //get credentials from the internal txt file
     $credentials = fopen(__DIR__ . "/credentials.txt", "r");
     $DB_HOST = trim(fgets($credentials));
     $DB_NAME = trim(fgets($credentials));
@@ -25,6 +25,8 @@
     }
     fclose($credentials);
 
+
+    //connect to db
     try {
         $conn = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME", $DB_USER, $DB_PASS);
         $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -33,9 +35,10 @@
         respond(500, ['success' => false, 'error' => 'Database connection failed: ' . $e->getMessage()]);
     }
 
+    //make sure that a malicious user can't query for other tables than the ones specified (Probably won't need this.)
     $sql = "SHOW TABLES";
     $result = $conn->query($sql);
-    $allowedTables = ['data_2026-09-04'];
+    $allowedTables = [];
     foreach ($result as $row) {
         $tableName = $row[0];
 
@@ -44,6 +47,7 @@
         }
     }
 
+    //Loading data from the frontend fetch
     $body = json_decode(file_get_contents('php://input'), true);
     //table is a string with the quarried table
     //columns is an array whose keys are the columns affected by the filters, and values are the applied filters.
@@ -61,7 +65,7 @@
         respond(400, ["success" => false, "error" => "Unknown table."]);
     }
 
-
+    //get all columns for later
     try {
         $stmt = $conn->prepare(
             "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
@@ -74,12 +78,13 @@
         respond(500, ["success" => false, "error" => "Could not read report columns: " . $e->getMessage()]);
     }
 
-
+    //change the "Ostatnia Sesja" column to coelesce so it picks the non-null value from the two tables
     $hasOwnSession = in_array('Ostatnia Sesja', $reportColumns, true);
     $ostatniaSesjaExpr = $hasOwnSession
         ? "COALESCE(a_latest.`Ostatnia Sesja`, r.`Ostatnia Sesja`)"
         : "a_latest.`Ostatnia Sesja`";
 
+    //assign columns their respective alias
     function resolveColumnExpr(string $internalName, string $ostatniaSesjaExpr): string {
         if ($internalName === 'Ostatnia Sesja') {
             return $ostatniaSesjaExpr;
@@ -89,7 +94,7 @@
         }
         return "r.`$internalName`";
     }
-
+    //finally, build the SELECT part of the sql query
     $reportSelectColumns = [];
     foreach ($reportColumns as $col) {
         if ($col === 'Ostatnia Sesja') {
@@ -105,6 +110,7 @@
         $filteredColumns[$friendlyName] = $filterValue;
     }
 
+    // get column type so we can filter through them correctly later
     $columnTypes = []; 
     if (!empty($filteredColumns)) {
         try {
@@ -155,6 +161,7 @@
         return sprintf('%04d-%02d-%02d 00:00:00', $year, $month, $day);
     }
 
+    //create a array of conditions to then use to build a sql query
     $whereParts = [];
     $params = [];
     foreach ($filteredColumns as $internalName => $filterValue) {
@@ -172,6 +179,7 @@
         }
     }
 
+    // Load the allow_null option.
     // Defaults to false when not provided, so rows with any null are filtered
     // out unless the frontend explicitly opts in with allow_null: true.
     $allowNull = isset($body['allow_null'])
@@ -184,9 +192,15 @@
         }
     }
 
+
+    //Actully building the WHERE query now
     $whereSql = $whereParts ? ('WHERE ' . implode(' AND ', $whereParts)) : '';
 
+    //descide load direction
     $sortDirection = $sort ? 'ASC' : 'DESC';
+
+    //Build a sql query to ORDER BY specific columns.
+    //Defaults to ordering by ID if omitted.
     $sortColumnsInternal = isset($body['orderby'])
         ? $body['orderby']
         : [];
@@ -204,6 +218,7 @@
     $offset = max(0, (int) ($range[0] ?? 0));
     $limitCount = max(0, (int) ($range[1] ?? 0) - $offset);
 
+    //Get count of all records returned by the query for the frontend to use
     $sql = "SELECT COUNT(*) AS 'count', a.`Data Umówiona`, a.`Notatka`, a.`Użytkownik`
             FROM `$quarriedTable` r
 
@@ -234,6 +249,7 @@
         respond(500, ['success' => false, 'error' => $e->getMessage()]);
     }
 
+    //Finally query data from the database and return it to the frontend
     $sql = "SELECT $reportSelectSql, a.`Data Umówiona`, a.`Notatka`, a.`Użytkownik`
             FROM `$quarriedTable` r
 
