@@ -76,8 +76,6 @@
 
 
     $hasOwnSession = in_array('Ostatnia Sesja', $reportColumns, true);
-    // a = latest non-checked activity, used for Data Umówiona / Notatka
-    // a_latest = latest activity regardless of Odznaczone, used for Ostatnia Sesja
     $ostatniaSesjaExpr = $hasOwnSession
         ? "COALESCE(a_latest.`Ostatnia Sesja`, r.`Ostatnia Sesja`)"
         : "a_latest.`Ostatnia Sesja`";
