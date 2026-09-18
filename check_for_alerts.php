@@ -38,6 +38,7 @@
         respond(400, ["success" => false, "error" => "Data either missing or invalid."]);
     }
 
+    //the amount of days where the alert will show beforehand. Change it to change how soon/late the alert shows.
     $cutoff = new DateTime();
     $cutoff->setTime(0, 0, 0);
     $cutoff->modify("+2 days");
