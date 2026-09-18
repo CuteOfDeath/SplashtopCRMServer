@@ -84,12 +84,22 @@
         ? "COALESCE(a_latest.`Ostatnia Sesja`, r.`Ostatnia Sesja`)"
         : "a_latest.`Ostatnia Sesja`";
 
+    //Notatka falls back to the most recent row overall when there's no
+    //currently-pending (Odznaczone = 0) row to pull it from
+    $notatkaExpr = "COALESCE(a.`Notatka`, a_lastrow.`Notatka`)";
+
     //assign columns their respective alias
-    function resolveColumnExpr(string $internalName, string $ostatniaSesjaExpr): string {
+    function resolveColumnExpr(string $internalName, string $ostatniaSesjaExpr, string $notatkaExpr): string {
         if ($internalName === 'Ostatnia Sesja') {
             return $ostatniaSesjaExpr;
         }
-        if ($internalName === 'Data Umówiona' || $internalName === 'Notatka') {
+        if ($internalName === 'Notatka') {
+            return $notatkaExpr;
+        }
+        if ($internalName === 'Użytkownik') {
+            return "a_lastrow.`$internalName`";
+        }
+        if ($internalName === 'Data Umówiona') {
             return "a.`$internalName`";
         }
         return "r.`$internalName`";
@@ -118,8 +128,7 @@
             $stmt = $conn->prepare(
                 "SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
                  WHERE TABLE_SCHEMA = DATABASE()
-                 AND TABLE_NAME = ? OR
-                 TABLE_NAME = 'aktywnosc'
+                 AND (TABLE_NAME = ? OR TABLE_NAME = 'aktywnosc')
                  AND COLUMN_NAME IN ($placeholders)"
             );
             $stmt->execute(array_merge([$quarriedTable], array_keys($filteredColumns)));
@@ -168,7 +177,7 @@
         if ($filterValue === '' || $filterValue === null) {
             continue;
         }
-        $columnExpr = resolveColumnExpr($internalName, $ostatniaSesjaExpr);
+        $columnExpr = resolveColumnExpr($internalName, $ostatniaSesjaExpr, $notatkaExpr);
         $type = $columnTypes[$internalName] ?? null;
         if (in_array($type, ['date', 'datetime', 'timestamp'], true)) {
             $whereParts[] = "$columnExpr >= ?";
@@ -188,7 +197,7 @@
 
     if (!$allowNull) {
         foreach (array_keys($filteredColumns) as $internalName) {
-            $whereParts[] = resolveColumnExpr($internalName, $ostatniaSesjaExpr) . " IS NOT NULL";
+            $whereParts[] = resolveColumnExpr($internalName, $ostatniaSesjaExpr, $notatkaExpr) . " IS NOT NULL";
         }
     }
 
@@ -210,7 +219,7 @@
 
     $orderBySql = [];
     foreach ($sortColumnsInternal as $column) {
-        $orderBySql[] = resolveColumnExpr($column, $ostatniaSesjaExpr) . " $sortDirection";
+        $orderBySql[] = resolveColumnExpr($column, $ostatniaSesjaExpr, $notatkaExpr) . " $sortDirection";
     }
     $orderBySql = implode(", ", $orderBySql);
 
@@ -219,7 +228,7 @@
     $limitCount = max(0, (int) ($range[1] ?? 0) - $offset);
 
     //Get count of all records returned by the query for the frontend to use
-    $sql = "SELECT COUNT(*) AS 'count', a.`Data Umówiona`, a.`Notatka`, a.`Użytkownik`
+    $sql = "SELECT COUNT(*) AS 'count', a.`Data Umówiona`, $notatkaExpr AS `Notatka`, a_lastrow.`Użytkownik`
             FROM `$quarriedTable` r
 
             LEFT JOIN aktywnosc a
@@ -238,6 +247,14 @@
                     SELECT MAX(a2.`Data Dodania`)
                     FROM aktywnosc a2
                     WHERE a2.Nazwa = r.Nazwa AND a2.`Ostatnia Sesja` IS NOT NULL
+                )
+
+            LEFT JOIN aktywnosc a_lastrow
+                ON a_lastrow.Nazwa = r.Nazwa
+                AND a_lastrow.`Data Dodania` = (
+                    SELECT MAX(a2.`Data Dodania`)
+                    FROM aktywnosc a2
+                    WHERE a2.Nazwa = r.Nazwa
                 ) $whereSql ORDER BY $orderBySql";
 
     try {
@@ -250,7 +267,7 @@
     }
 
     //Finally query data from the database and return it to the frontend
-    $sql = "SELECT $reportSelectSql, a.`Data Umówiona`, a.`Notatka`, a.`Użytkownik`
+    $sql = "SELECT $reportSelectSql, a.`Data Umówiona`, $notatkaExpr AS `Notatka`, a_lastrow.`Użytkownik`
             FROM `$quarriedTable` r
 
             LEFT JOIN aktywnosc a
@@ -269,6 +286,14 @@
                     SELECT MAX(a2.`Data Dodania`)
                     FROM aktywnosc a2
                     WHERE a2.Nazwa = r.Nazwa AND a2.`Ostatnia Sesja` IS NOT NULL
+                )
+
+            LEFT JOIN aktywnosc a_lastrow
+                ON a_lastrow.Nazwa = r.Nazwa
+                AND a_lastrow.`Data Dodania` = (
+                    SELECT MAX(a2.`Data Dodania`)
+                    FROM aktywnosc a2
+                    WHERE a2.Nazwa = r.Nazwa
                 ) $whereSql ORDER BY $orderBySql LIMIT $limitCount OFFSET $offset";
 
     try {

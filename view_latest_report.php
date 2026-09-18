@@ -100,7 +100,7 @@
     }
 
     try{
-        $stmt = $conn->query("SELECT $reportSelectSql, a.`Data Umówiona`, a.`Notatka`, a.`Użytkownik`
+        $stmt = $conn->query("SELECT $reportSelectSql, a.`Data Umówiona`, COALESCE(a.`Notatka`, a_lastrow.`Notatka`) AS `Notatka`, a_lastrow.`Użytkownik`
         FROM `$latestTable` r
         LEFT JOIN aktywnosc a
             ON a.Nazwa = r.Nazwa
@@ -116,6 +116,13 @@
                 SELECT MAX(a2.`Data Dodania`)
                 FROM aktywnosc a2
                 WHERE a2.Nazwa = r.Nazwa AND a2.`Ostatnia Sesja` IS NOT NULL
+            )
+        LEFT JOIN aktywnosc a_lastrow
+            ON a_lastrow.Nazwa = r.Nazwa
+            AND a_lastrow.`Data Dodania` = (
+                SELECT MAX(a2.`Data Dodania`)
+                FROM aktywnosc a2
+                WHERE a2.Nazwa = r.Nazwa
             )
         ORDER BY r.id LIMIT 50");
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
