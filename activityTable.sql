@@ -2,7 +2,7 @@
 
 CREATE TABLE `aktywnosc` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
-  `Nazwa` varchar(50) NOT NULL,
+  `Nazwa` varchar(255) NOT NULL,
   `Data Dodania` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
   `Data Umówiona` datetime DEFAULT NULL,
   `Ostatnia Sesja` datetime DEFAULT NULL,
